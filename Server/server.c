@@ -75,4 +75,47 @@ int main(void) {
 		fprintf(stderr, "server: failed to bind\n");
 		return 2;
 	}
+
+	freeaddrinfo(serverinfo);
+
+	if(listen(sockfd, BACKLOG) == -1) {
+		perror("listen");
+		exit(1);
+	}
+
+	sa.sa_handler = sigchld_handler; // reap all dead processes
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = SA_RESTART;
+
+	if(sigaction(SIGCHLD, &sa, NULL) == -1) {
+		perror("sigaction");
+		exit(1);
+	}
+
+	printf("server: waiting for connections...\n");
+
+	while(1) { // main accept() loop
+		sin_size = sizeof their_addr;
+		new_fd = accept(sockfd, (struct sockaddr *) &their_addr, &sin_size);
+		if (new_fd == -1) {
+			perror("accept");
+			continue;
+		}
+
+		inet_ntop(their_addr.ss_family, 
+			get_in_addr((struct sockaddr *)&their_addr), s, sizeof s);
+		printf("server: got connection from %s\n", s);
+
+		if(!fork()) { // this is the child process
+			close(sockfd);
+			if(send(new_fd, "Hello, world!", 13, 0) == -1){
+				perror("send");
+			}
+			close(new_fd);
+			exit(0);
+		}
+		close(new_fd);
+	}
+
+	return 0;
 }
